@@ -1,0 +1,266 @@
+
+explain analyze
+select l.zipcode, count(h.is_superhost)
+from listing l join host h on l.host_id = h.id
+where h.is_superhost = TRUE
+group by l.zipcode
+order by count(h.is_superhost) desc
+limit 50;
+:                                                                 QUERY PLAN                                                                  
+---------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=13502.28..13502.41 rows=50 width=13) (actual time=26.681..26.689 rows=43 loops=1)
+   ->  Sort  (cost=13502.28..13502.41 rows=52 width=13) (actual time=26.679..26.681 rows=43 loops=1)
+         Sort Key: (count(h.is_superhost)) DESC
+         Sort Method: quicksort  Memory: 27kB
+         ->  GroupAggregate  (cost=13489.93..13500.80 rows=52 width=13) (actual time=26.219..26.660 rows=43 loops=1)
+               Group Key: l.zipcode
+               ->  Sort  (cost=13489.93..13493.38 rows=1380 width=6) (actual time=26.213..26.377 rows=1740 loops=1)
+                     Sort Key: l.zipcode
+                     Sort Method: quicksort  Memory: 130kB
+                     ->  Hash Join  (cost=1575.30..13417.96 rows=1380 width=6) (actual time=4.949..25.223 rows=1740 loops=1)
+                           Hash Cond: (l.host_id = h.id)
+                           ->  Seq Scan on listing l  (cost=0.00..11792.63 rows=9663 width=9) (actual time=0.008..18.627 rows=9663 loops=1)
+                           ->  Hash  (cost=1561.92..1561.92 rows=1070 width=5) (actual time=4.904..4.904 rows=1070 loops=1)
+                                 Buckets: 2048  Batches: 1  Memory Usage: 58kB
+                                 ->  Seq Scan on host h  (cost=0.00..1561.92 rows=1070 width=5) (actual time=0.007..4.700 rows=1070 loops=1)
+                                       Filter: is_superhost
+                                       Rows Removed by Filter: 6422
+ Planning time: 0.436 ms
+ Execution time: 26.733 ms
+(19 rows)
+
+/* Query 1: w/out index: 26.7 ms; w/index: 26.5 ms */
+
+                                                                           QUERY PLAN                                                                            
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=13406.02..13406.14 rows=50 width=13) (actual time=26.479..26.489 rows=43 loops=1)
+   ->  Sort  (cost=13406.02..13406.15 rows=52 width=13) (actual time=26.477..26.482 rows=43 loops=1)
+         Sort Key: (count(h.is_superhost)) DESC
+         Sort Method: quicksort  Memory: 27kB
+         ->  GroupAggregate  (cost=13393.66..13404.53 rows=52 width=13) (actual time=25.933..26.451 rows=43 loops=1)
+               Group Key: l.zipcode
+               ->  Sort  (cost=13393.66..13397.11 rows=1380 width=6) (actual time=25.928..26.096 rows=1740 loops=1)
+                     Sort Key: l.zipcode
+                     Sort Method: quicksort  Memory: 130kB
+                     ->  Hash Join  (cost=1479.03..13321.69 rows=1380 width=6) (actual time=2.493..24.812 rows=1740 loops=1)
+                           Hash Cond: (l.host_id = h.id)
+                           ->  Seq Scan on listing l  (cost=0.00..11792.63 rows=9663 width=9) (actual time=0.008..20.363 rows=9663 loops=1)
+                           ->  Hash  (cost=1465.65..1465.65 rows=1070 width=5) (actual time=2.453..2.453 rows=1070 loops=1)
+                                 Buckets: 2048  Batches: 1  Memory Usage: 58kB
+                                 ->  Bitmap Heap Scan on host h  (cost=24.57..1465.65 rows=1070 width=5) (actual time=0.300..2.269 rows=1070 loops=1)
+                                       Filter: is_superhost
+                                       Heap Blocks: exact=586
+                                       ->  Bitmap Index Scan on superhost_idx  (cost=0.00..24.31 rows=1070 width=0) (actual time=0.223..0.223 rows=1070 loops=1)
+                                             Index Cond: (is_superhost = true)
+ Planning time: 0.414 ms
+ Execution time: 26.542 ms
+(21 rows)
+
+
+
+explain analyze
+select l.neighborhood, count(h.name)
+from host h join listing l on h.id = l.host_id
+join amenity a on l.id = a.listing_id
+where amenity_name = 'Breakfast'
+group by l.neighborhood;
+
+                                                                     QUERY PLAN                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=5161.62..5164.79 rows=81 width=20) (actual time=31.771..32.109 rows=76 loops=1)
+   Group Key: l.neighborhood
+   ->  Sort  (cost=5161.62..5162.41 rows=315 width=18) (actual time=31.761..31.902 rows=1330 loops=1)
+         Sort Key: l.neighborhood
+         Sort Method: quicksort  Memory: 134kB
+         ->  Nested Loop  (cost=0.57..5148.55 rows=315 width=18) (actual time=0.028..30.820 rows=1330 loops=1)
+               ->  Nested Loop  (cost=0.29..4849.05 rows=315 width=16) (actual time=0.024..26.622 rows=1330 loops=1)
+                     ->  Seq Scan on amenity a  (cost=0.00..3212.54 rows=315 width=4) (actual time=0.011..21.211 rows=1330 loops=1)
+                           Filter: (amenity_name = 'Breakfast'::text)
+                           Rows Removed by Filter: 170793
+                     ->  Index Scan using listing_pkey on listing l  (cost=0.29..5.19 rows=1 width=20) (actual time=0.003..0.004 rows=1 loops=1330)
+                           Index Cond: (id = a.listing_id)
+               ->  Index Scan using host_pkey on host h  (cost=0.28..0.94 rows=1 width=10) (actual time=0.003..0.003 rows=1 loops=1330)
+                     Index Cond: (id = l.host_id)
+ Planning time: 0.512 ms
+ Execution time: 32.163 ms
+(16 rows)
+
+/* Query 2: w/out index: 32.2 ms; w/index: 11.2 ms */
+
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=2643.87..2647.04 rows=81 width=20) (actual time=10.753..11.120 rows=76 loops=1)
+   Group Key: l.neighborhood
+   ->  Sort  (cost=2643.87..2644.66 rows=315 width=18) (actual time=10.743..10.890 rows=1330 loops=1)
+         Sort Key: l.neighborhood
+         Sort Method: quicksort  Memory: 134kB
+         ->  Nested Loop  (cost=11.43..2630.80 rows=315 width=18) (actual time=0.395..9.882 rows=1330 loops=1)
+               ->  Nested Loop  (cost=11.15..2331.30 rows=315 width=16) (actual time=0.388..6.519 rows=1330 loops=1)
+                     ->  Bitmap Heap Scan on amenity a  (cost=10.86..694.79 rows=315 width=4) (actual time=0.378..1.648 rows=1330 loops=1)
+                           Recheck Cond: (amenity_name = 'Breakfast'::text)
+                           Heap Blocks: exact=781
+                           ->  Bitmap Index Scan on amenity_name_idx  (cost=0.00..10.78 rows=315 width=0) (actual time=0.272..0.272 rows=1330 loops=1)
+                                 Index Cond: (amenity_name = 'Breakfast'::text)
+                     ->  Index Scan using listing_pkey on listing l  (cost=0.29..5.19 rows=1 width=20) (actual time=0.003..0.003 rows=1 loops=1330)
+                           Index Cond: (id = a.listing_id)
+               ->  Index Scan using host_pkey on host h  (cost=0.28..0.94 rows=1 width=10) (actual time=0.002..0.002 rows=1 loops=1330)
+                     Index Cond: (id = l.host_id)
+ Planning time: 0.571 ms
+ Execution time: 11.181 ms
+(18 rows)
+
+
+explain analyze
+select neighborhood, count(*)
+from listing
+where neighborhood is not NULL
+group by neighborhood
+having count(*) >= 100;
+
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ HashAggregate  (cost=11847.61..11848.42 rows=81 width=20) (actual time=23.877..23.898 rows=30 loops=1)
+   Group Key: neighborhood
+   Filter: (count(*) >= 100)
+   Rows Removed by Filter: 51
+   ->  Seq Scan on listing  (cost=0.00..11792.63 rows=7331 width=12) (actual time=0.016..21.837 rows=7331 loops=1)
+         Filter: (neighborhood IS NOT NULL)
+         Rows Removed by Filter: 2332
+ Planning time: 0.101 ms
+ Execution time: 23.953 ms
+(9 rows)
+
+/* Query 3: w/out index: 23.9 ms; w/index: 1.9 ms */
+
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=0.29..296.37 rows=81 width=20) (actual time=0.132..1.933 rows=30 loops=1)
+   Group Key: neighborhood
+   Filter: (count(*) >= 100)
+   Rows Removed by Filter: 51
+   ->  Index Only Scan using neighborhood_idx on listing  (cost=0.29..240.58 rows=7331 width=12) (actual time=0.017..0.940 rows=7331 loops=1)
+         Index Cond: (neighborhood IS NOT NULL)
+         Heap Fetches: 0
+ Planning time: 0.076 ms
+ Execution time: 1.969 ms
+(9 rows)
+
+explain analyze
+select l.name, count(a.amenity_name)
+from amenity a join listing l on l.id = a.listing_id
+group by l.name
+having count(amenity_name) > 6;
+                                                           QUERY PLAN                                                            
+---------------------------------------------------------------------------------------------------------------------------------
+ HashAggregate  (cost=18353.26..18448.78 rows=9552 width=41) (actual time=172.712..178.356 rows=9267 loops=1)
+   Group Key: l.name
+   Filter: (count(a.amenity_name) > 6)
+   Rows Removed by Filter: 285
+   ->  Hash Join  (cost=11913.42..17062.34 rows=172123 width=47) (actual time=22.933..116.657 rows=172123 loops=1)
+         Hash Cond: (a.listing_id = l.id)
+         ->  Seq Scan on amenity a  (cost=0.00..2782.23 rows=172123 width=18) (actual time=0.016..21.094 rows=172123 loops=1)
+         ->  Hash  (cost=11792.63..11792.63 rows=9663 width=37) (actual time=22.860..22.860 rows=9663 loops=1)
+               Buckets: 16384  Batches: 1  Memory Usage: 800kB
+               ->  Seq Scan on listing l  (cost=0.00..11792.63 rows=9663 width=37) (actual time=0.010..18.866 rows=9663 loops=1)
+ Planning time: 0.531 ms
+ Execution time: 179.178 ms
+(12 rows)
+
+/* Query 4: w/out index: 179.2 ms; w/index: 141.9 ms */
+
+                                                           QUERY PLAN                                                            
+---------------------------------------------------------------------------------------------------------------------------------
+ HashAggregate  (cost=18353.26..18448.78 rows=9552 width=41) (actual time=137.687..141.354 rows=9267 loops=1)
+   Group Key: l.name
+   Filter: (count(a.amenity_name) > 6)
+   Rows Removed by Filter: 285
+   ->  Hash Join  (cost=11913.42..17062.34 rows=172123 width=47) (actual time=16.911..92.346 rows=172123 loops=1)
+         Hash Cond: (a.listing_id = l.id)
+         ->  Seq Scan on amenity a  (cost=0.00..2782.23 rows=172123 width=18) (actual time=0.007..17.201 rows=172123 loops=1)
+         ->  Hash  (cost=11792.63..11792.63 rows=9663 width=37) (actual time=16.867..16.867 rows=9663 loops=1)
+               Buckets: 16384  Batches: 1  Memory Usage: 800kB
+               ->  Seq Scan on listing l  (cost=0.00..11792.63 rows=9663 width=37) (actual time=0.007..14.898 rows=9663 loops=1)
+ Planning time: 0.450 ms
+ Execution time: 141.954 ms
+(12 rows)
+
+explain analyze
+select h.is_superhost, count(a.amenity_name)
+from host h join listing l on h.id = l.host_id
+join amenity a on l.id = a.listing_id
+where amenity_name= 'Breakfast'
+group by is_superhost;
+
+                                                                    QUERY PLAN                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=5161.62..5164.00 rows=2 width=10) (actual time=45.004..45.079 rows=3 loops=1)
+   Group Key: h.is_superhost
+   ->  Sort  (cost=5161.62..5162.41 rows=315 width=15) (actual time=44.579..44.748 rows=1330 loops=1)
+         Sort Key: h.is_superhost
+         Sort Method: quicksort  Memory: 111kB
+         ->  Nested Loop  (cost=0.57..5148.55 rows=315 width=15) (actual time=0.032..44.074 rows=1330 loops=1)
+               ->  Nested Loop  (cost=0.29..4849.05 rows=315 width=18) (actual time=0.025..37.348 rows=1330 loops=1)
+                     ->  Seq Scan on amenity a  (cost=0.00..3212.54 rows=315 width=18) (actual time=0.015..29.471 rows=1330 loops=1)
+                           Filter: (amenity_name = 'Breakfast'::text)
+                           Rows Removed by Filter: 170793
+                     ->  Index Scan using listing_pkey on listing l  (cost=0.29..5.19 rows=1 width=8) (actual time=0.005..0.005 rows=1 loops=1330)
+                           Index Cond: (id = a.listing_id)
+               ->  Index Scan using host_pkey on host h  (cost=0.28..0.94 rows=1 width=5) (actual time=0.004..0.004 rows=1 loops=1330)
+                     Index Cond: (id = l.host_id)
+ Planning time: 0.556 ms
+ Execution time: 45.149 ms
+(16 rows)
+
+/* Query 5: w/out index: 45.1 ms; w/index: 13.5 ms */
+
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=2643.87..2646.25 rows=2 width=10) (actual time=13.339..13.400 rows=3 loops=1)
+   Group Key: h.is_superhost
+   ->  Sort  (cost=2643.87..2644.66 rows=315 width=15) (actual time=13.076..13.205 rows=1330 loops=1)
+         Sort Key: h.is_superhost
+         Sort Method: quicksort  Memory: 111kB
+         ->  Nested Loop  (cost=11.43..2630.80 rows=315 width=15) (actual time=0.299..12.668 rows=1330 loops=1)
+               ->  Nested Loop  (cost=11.15..2331.30 rows=315 width=18) (actual time=0.294..7.908 rows=1330 loops=1)
+                     ->  Bitmap Heap Scan on amenity a  (cost=10.86..694.79 rows=315 width=18) (actual time=0.286..2.009 rows=1330 loops=1)
+                           Recheck Cond: (amenity_name = 'Breakfast'::text)
+                           Heap Blocks: exact=781
+                           ->  Bitmap Index Scan on amenity_name_idx  (cost=0.00..10.78 rows=315 width=0) (actual time=0.184..0.184 rows=1330 loops=1)
+                                 Index Cond: (amenity_name = 'Breakfast'::text)
+                     ->  Index Scan using listing_pkey on listing l  (cost=0.29..5.19 rows=1 width=8) (actual time=0.004..0.004 rows=1 loops=1330)
+                           Index Cond: (id = a.listing_id)
+               ->  Index Scan using host_pkey on host h  (cost=0.28..0.94 rows=1 width=5) (actual time=0.003..0.003 rows=1 loops=1330)
+                     Index Cond: (id = l.host_id)
+ Planning time: 0.746 ms
+ Execution time: 13.468 ms
+(18 rows)
+
+explain analyze
+select c.date, count(c.available)
+from calendar c
+where c.available = TRUE
+group by c.date;
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ HashAggregate  (cost=106506.24..106509.90 rows=366 width=12) (actual time=945.063..945.126 rows=366 loops=1)
+   Group Key: date
+   ->  Seq Scan on calendar c  (cost=0.00..97489.20 rows=1803407 width=5) (actual time=0.010..588.984 rows=1617297 loops=1)
+         Filter: available
+         Rows Removed by Filter: 1909698
+ Planning time: 0.255 ms
+ Execution time: 945.195 ms
+(7 rows)
+
+/* Query 6: w/out index: 945.2 ms; w/index: 643.4 ms */
+
+                                                                         QUERY PLAN                                                                         
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=0.43..89613.55 rows=366 width=12) (actual time=1.047..623.314 rows=366 loops=1)
+   Group Key: date
+   ->  Index Only Scan using date_available_idx on calendar c  (cost=0.43..81454.89 rows=1631000 width=5) (actual time=0.333..421.005 rows=1617297 loops=1)
+         Index Cond: (available = true)
+         Filter: available
+         Heap Fetches: 0
+ Planning time: 0.321 ms
+ Execution time: 623.439 ms
+(8 rows)
