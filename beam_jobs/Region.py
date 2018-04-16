@@ -53,8 +53,6 @@ def init_bigquery_table():
 
 def create_bigquery_record(tuple):
 
-	# tuple format = (zipcode, city, state, metro, county)
-	# For example, (78751, 'Austin', 'TX', 'Austin', 'Travis')
 		
 	zipcode, city, state, metro, county = tuple
 	bq_record = {'zipcode': zipcode, 'city': city, 'state': state, 'metro': metro, 'county': county}
@@ -81,6 +79,8 @@ def parse_line(line):
 def parse_records(records):
 	return records[0]
 
+
+# want distinct zipcodes in DB
 def create_dist(record):
 	row, val = record
 	return row
@@ -92,9 +92,9 @@ def run(argv=None):
 	known_args, pipeline_args = parser.parse_known_args(argv)
 	pipeline_args.extend([	
       '--runner=DataflowRunner', # use DataflowRunner to run on Dataflow or DirectRunner to run on local VM
-      '--project=spooky-data-seance', # change to your project_id
-      '--staging_location=gs://bayes-the-databae/staging', # change to your bucket
-      '--temp_location=gs://bayes-the-databae/temp', # change to your bucket
+      '--project=spooky-data-seance', # project_id
+      '--staging_location=gs://bayes-the-databae/staging', # bucket
+      '--temp_location=gs://bayes-the-databae/temp', # bucket
       '--job_name=bayyyyyesss-region' # assign descriptive name to this job, all in lower case letters
 	])
 	
