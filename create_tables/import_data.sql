@@ -1,0 +1,6 @@
+\copy Calendar from '~/Projects/Bayes-the-Databae/lab2/data/calendar.csv' (format csv, header true)
+\copy Listing from '~/Projects/Bayes-the-Databae/lab2/data/listings.csv' (format csv, header true)
+\copy Neighbourhoods from '~/Projects/Bayes-the-Databae/lab2/data/neighbourhoods.csv' (format csv, header true)
+\copy Reviews from '~/Projects/Bayes-the-Databae/lab2/data/reviews.csv' (format csv, header true)
+\copy Summary_Listings from '~/Projects/Bayes-the-Databae/lab2/data/summary_listings.csv' (format csv, header true)
+\copy Summary_Reviews from '~/Projects/Bayes-the-Databae/lab2/data/summary_reviews.csv' (format csv, header true)
